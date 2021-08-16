@@ -53,33 +53,33 @@ module.exports =
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
 const core = __webpack_require__(68);
-const path = __webpack_require__(622)
-const util = __webpack_require__(669);
-const exec = util.promisify(__webpack_require__(129).exec);
+const path = __webpack_require__(622);
+const exec = __webpack_require__(85);
+
 
 async function init() {
     try {
         const version = core.getInput("terraform_version");
         const versionsSet = version.split(".");
         const majorVer = (versionsSet[0] = "0") ? versionsSet[1] : versionsSet[0];
-        const initcmd = makeInitCmd(core.getInput("bucket"), core.getInput("stateprefix"), core.getInput("aws_region"), majorVer);
-        core.info(`Changing directories to working directory..`)
-        process.chdir(path.join(process.cwd(), core.getInput("confpath")))
-        core.info(`Starting terraform init with command ${initcmd}`);
-        const { stdout, stderr } = await exec(initcmd);
-        core.info(`stdout: ${stdout}`);
-        core.info(`stderr:, ${stderr}`);
+        const bucket = core.getInput("bucket")
+        const prefix = core.getInput("stateprefix")
+        const region = core.getInput("aws_region")
+        core.info(`Changing directories to working directory`)
+        const maincmd = `terraform${majorVer}`
+        const args = [`init`, `-force-copy`, `-backend-config`, `region=${region}`, `-backend-config`, `bucket=${bucket}`, `-backend-config`, `key=${prefix}`]
+        const versionargs = ['-version']
+        process.chdir(path.join(process.cwd(), core.getInput("working-directory")))
+        core.info(`Starting terraform init with command ${maincmd} ${args}`);
+        core.info(`Getting terraform version ${maincmd} ${versionargs}`);
+        core.startGroup(`Terraform init`);
+        await exec.exec(maincmd, args);
+        await exec.exec(maincmd, versionargs);
+        core.endGroup();
     } catch (err) {
         core.error(err);
         throw err;
     }
-}
-
-function makeInitCmd(bucket, prefix, region, majorVer) {
-    if (bucket != '' && prefix != '') {
-        return `terraform${majorVer} init -force-copy -backend-config region=${region} -backend-config bucket=${bucket} -backend-config key=${prefix}`
-    }
-    return `terraform${majorVer} init`
 }
 
 module.exports = init;
@@ -101,7 +101,8 @@ module.exports = require("tls");
 
 const core = __webpack_require__(68);
 const util = __webpack_require__(669);
-const exec = util.promisify(__webpack_require__(129).exec);
+const path = __webpack_require__(622)
+const exec = util.promisify(__webpack_require__(129).execFile);
 
 async function destroy() {
     try {
@@ -109,6 +110,8 @@ async function destroy() {
         const versionsSet = version.split(".");
         const majorVer = (versionsSet[0] = "0") ? versionsSet[1] : versionsSet[0];
         const destroycmd = makeDestroyCmd(core.getInput("varsfile"), core.getInput("planfile"), core.getInput("workspace"), majorVer);
+        core.info(`Changing directories to working directory`)
+        process.chdir(path.join(process.cwd(), core.getInput("working-directory")))
         core.info(`Starting terraform plan with command ${destroycmd}`);
         const { stdout, stderr } = await exec(destroycmd);
         core.info(`stdout: ${stdout}`);
@@ -1501,30 +1504,38 @@ module.exports = require("string_decoder");
 
 const core = __webpack_require__(68);
 const util = __webpack_require__(669);
-const exec = util.promisify(__webpack_require__(129).exec);
+const path = __webpack_require__(622);
+const exec = __webpack_require__(85);
 
 async function apply() {
     try {
         const version = core.getInput("terraform_version");
         const versionsSet = version.split(".");
         const majorVer = (versionsSet[0] = "0") ? versionsSet[1] : versionsSet[0];
-        const applycmd = makeApplyCmd(core.getInput("varsfile"), core.getInput("planfile"), core.getInput("workspace"), majorVer);
-        core.info(`Starting terraform apply with command ${applycmd}`);
-        const { stdout, stderr } = await exec(plancmd);
-        core.info(`stdout: ${stdout}`);
-        core.info(`stderr:, ${stderr}`);
+        const maincmd = `terraform${majorVer}`
+        const workspace = core.getInput("workspace");
+        //const varsfile = core.getInput("varsfile")
+        //const planfile = core.getInput("planfile")
+        const args = [`workspace`, `select`, `${workspace}`, `||`, `${maincmd}`, `workspace`, `new`, `${workspace}`]
+        //const applycmd = makeApplyCmd(core.getInput("varsfile"), core.getInput("planfile"), core.getInput("workspace"), majorVer);
+        core.info(`Changing directories to working directory`)
+        process.chdir(path.join(process.cwd(), core.getInput("working-directory")))
+        core.info(`Starting terraform apply with command ${maincmd} ${args}`);
+        core.startGroup(`Terraform info`);
+        await exec.exec(maincmd, args);
+        core.endGroup();
     } catch (err) {
         core.error(err);
         throw err;
     }
 }
 
-function makeApplyCmd(varsfile, planfile, workspace, majorVer) {
-    if (varsfile != '') {
-        return `terraform${majorVer} workspace select ${workspace} || terraform${majorVer} workspace new ${workspace} && terraform${majorVer} plan -var-file ${varsfile} -out ${planfile} && terraform${majorVer} apply ${planfile}`
-    }
-    return `terraform${majorVer} workspace select ${workspace} || terraform${majorVer} workspace new ${workspace} && terraform${majorVer} plan -out ${planfile} && terraform${majorVer} apply ${planfile}`
-}
+// function makeApplyCmd(varsfile, planfile, workspace, majorVer) {
+//     if (varsfile != '') {
+//         return `terraform${majorVer} workspace select ${workspace} || terraform${majorVer} workspace new ${workspace} && terraform${majorVer} plan -var-file ${varsfile} -out ${planfile} && terraform${majorVer} apply ${planfile}`
+//     }
+//     return `terraform${majorVer} workspace select ${workspace} || terraform${majorVer} workspace new ${workspace} && terraform${majorVer} plan -out ${planfile} && terraform${majorVer} apply ${planfile}`
+// }
 
 module.exports = apply;
 
@@ -2727,7 +2738,8 @@ exports.getCmdPath = getCmdPath;
 
 const core = __webpack_require__(68);
 const util = __webpack_require__(669);
-const exec = util.promisify(__webpack_require__(129).exec);
+const path = __webpack_require__(622)
+const exec = util.promisify(__webpack_require__(129).execFile);
 
 async function plan() {
     try {
@@ -2735,6 +2747,8 @@ async function plan() {
         const versionsSet = version.split(".");
         const majorVer = (versionsSet[0] = "0") ? versionsSet[1] : versionsSet[0];
         const plancmd = makePlanCmd(core.getInput("varsfile"), core.getInput("planfile"), core.getInput("workspace"), majorVer);
+        core.info(`Changing directories to working directory`)
+        process.chdir(path.join(process.cwd(), core.getInput("working-directory")))
         core.info(`Starting terraform plan with command ${plancmd}`);
         const { stdout, stderr } = await exec(plancmd);
         core.info(`stdout: ${stdout}`);
